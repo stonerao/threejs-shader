@@ -27,7 +27,7 @@ uv(vec2) 贴图的点位![attributes](https://img-blog.csdnimg.cn/20210616161700
 #### fragmentShader 
 在片元着色器中运行的代码
 
-### 第一个Demo
+### 第一个Demo（修改颜色）
 我们输出一个最简单的Demo，修改颜色
 
 ```javascript
@@ -55,7 +55,7 @@ scene.add(plane);
 ```
 ![在这里插入图片描述](https://img-blog.csdnimg.cn/20210616163736692.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzI5ODE0NDE3,size_16,color_FFFFFF,t_70)
 
-#### 修改输出
+**修改输出**
 我们在uniforms传递一个参数，然后通过着色器去接收这个参数。
 
 ```javascript
@@ -88,6 +88,198 @@ setInterval(() => {
 
 这样我们就编写了一个最简单的可以修改物体颜色的shader材质
 
+### 第二个Demo
+通过接受顶点数据，来输出对应的颜色。通过varying变量，可以把顶点的数据着色器传递到片元着色器之中
+
+申明一个三维向量接受position传递给片元，然后我们判断y轴小于0的为uColor的颜色，否则为uColor1的颜色
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20210616171240374.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzI5ODE0NDE3,size_16,color_FFFFFF,t_70)
+
+```javascript
+const geometry = new THREE.PlaneGeometry(100, 100);
+
+const shader = new THREE.ShaderMaterial({
+    uniforms: {
+        uColor: {
+            value: new THREE.Color('#FFFF00'),
+        },
+        uColor1: {
+            value: new THREE.Color('#FFFFFF'),
+        }
+    },
+    vertexShader: `
+        varying vec3 vPosition; // + 新增
+        void main() {
+            // 顶点着色器计算后的Position
+            vPosition = position; // + 新增
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+    fragmentShader: `
+        uniform vec3 uColor;
+        uniform vec3 uColor1; // + 新增
+        varying vec3 vPosition; // + 新增
+        void main() { 
+            if (vPosition.y < 0.0) { // + 新增
+                gl_FragColor = vec4(uColor, 1.0);
+            } else { // + 新增
+                gl_FragColor = vec4(uColor1, 1.0); // + 新增
+            } // + 新增
+        }`
+});
+
+const plane = new THREE.Mesh(geometry, shader);
+
+scene.add(plane);
+```
+最后我们得到了一个上下不一样颜色的图形
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20210616171528277.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzI5ODE0NDE3,size_16,color_FFFFFF,t_70)
+也可以在片元着色器中画一个圆
+
+```javascript
+
+const geometry = new THREE.PlaneGeometry(100, 100);
+
+const shader = new THREE.ShaderMaterial({
+    uniforms: {
+        uColor: {
+            value: new THREE.Color('#FFFF00'),
+        },
+        uColor1: {
+            value: new THREE.Color('#FFFFFF'),
+        },
+        uRadius: {
+            value: 0
+        }
+    },
+    vertexShader: `
+        varying vec3 vPosition;
+        void main() {
+            // 顶点着色器计算后的Position
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+    fragmentShader: `
+        uniform float uRadius; // 设置一个半径范围
+        uniform vec3 uColor;
+        uniform vec3 uColor1;
+        varying vec3 vPosition;
+        void main() { 
+        	// 中心点
+            vec3 vCenter = vec3(.0, .0, .0);
+			// 计算顶点离中心点的距离
+            float len = distance(vCenter, vPosition);
+			// 设置在半径范围内的颜色为uColor 反之 为 uColor
+            if (len < uRadius) {
+                gl_FragColor = vec4(uColor1, 1.0);
+            } else {
+                gl_FragColor = vec4(uColor, 1.0);
+            }
+        }`
+});
+
+const plane = new THREE.Mesh(geometry, shader);
+
+scene.add(plane);
+
+let radius = 1;
+setInterval(() => {
+    const color = `rgb(${radom()}, ${radom()}, ${radom()})`;
+    shader.uniforms.uColor.value.setStyle(color);
+
+    shader.uniforms.uRadius.value = radius % 50;
+
+    radius++;
+}, 50)
+```
+就得到了以下的图形
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20210616172320468.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzI5ODE0NDE3,size_16,color_FFFFFF,t_70)
+
+#### 把图片纹理传递到当前DEMO中
+顶点着色器：varying把图片的uv传递给片元。使用纹理必须有对应的uv
+
+
+```javascript
+
+const textureLoader = new THREE.TextureLoader();
+const texture = textureLoader.load('/textures/texture.jpg')
+
+const geometry = new THREE.PlaneGeometry(100, 100);
+
+const shader = new THREE.ShaderMaterial({
+    uniforms: {
+        uColor: {
+            value: new THREE.Color('#FFFF00'),
+        },
+        uRadius: {
+            value: 0
+        },
+        uTexture: {
+            value: texture
+        }
+    },
+    vertexShader: `
+        varying vec3 vPosition;
+
+        varying vec2 vUV; // 
+        void main() {
+            // 顶点着色器计算后的Position
+            vPosition = position;
+            // 把uv数据传递给片元
+            vUV = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+    fragmentShader: `
+        uniform float uRadius; // 设置一个半径范围
+        uniform vec3 uColor; // 颜色1
+        varying vec3 vPosition; // 顶点数据
+        varying vec2 vUV; // uv
+        uniform sampler2D uTexture; // 材质
+        void main() { 
+            // 材质和uv计算为当前位置颜色
+            vec4 mapColor = texture2D(uTexture, vUV);
+
+            vec3 vCenter = vec3(.0, .0, .0);
+
+            float len = distance(vCenter, vPosition);
+
+            if (len < uRadius) {
+                gl_FragColor = mapColor;
+            } else {
+                gl_FragColor = vec4(uColor, 1.0);
+            }
+            
+        }`
+});
+
+const plane = new THREE.Mesh(geometry, shader);
+
+scene.add(plane);
+
+let radius = 1;
+setInterval(() => {
+    const color = `rgb(${radom()}, ${radom()}, ${radom()})`;
+    shader.uniforms.uColor.value.setStyle(color);
+
+    shader.uniforms.uRadius.value = radius % 50;
+
+    radius++;
+}, 50)
+```
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20210616173946267.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzI5ODE0NDE3,size_16,color_FFFFFF,t_70)
+
+### 总结
+在着色器中，操控顶点数据和片元输出的颜色，就能做出更多的效果。
+更深入的待续。
+
+
+---
+
+
+[代码地址](https://github.com/stonerao/threejs-shader)
+觉得可以的话请给一个小星星或者一个赞
+QQ群:1082834010
+
+---
 ### 基本类型:
 
 |类型|说明|
